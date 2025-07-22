@@ -1,0 +1,7 @@
+version: '3'
+
+tasks:
+  create:
+    desc: "Root task"
+    cmds:
+      - echo "PLACEHOLDER"

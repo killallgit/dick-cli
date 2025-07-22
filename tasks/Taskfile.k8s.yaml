@@ -1,0 +1,35 @@
+version: '3'
+
+tasks:
+  # Standardized hooks
+  hook:setup:
+    desc: "Create a kind cluster (standardized setup hook)"
+    cmds:
+      - kind create cluster --name {{.CLUSTER_NAME | default "dev-cluster"}}
+
+  hook:teardown:
+    desc: "Destroy the kind cluster (standardized teardown hook)"
+    cmds:
+      - kind delete cluster --name {{.CLUSTER_NAME | default "dev-cluster"}}
+
+  # Legacy task names for backward compatibility
+  setup:
+    desc: "Set up the kind cluster (legacy name)"
+    cmds:
+      - task: hook:setup
+        vars:
+          CLUSTER_NAME: "{{.CLUSTER_NAME}}"
+
+  kind:create:
+    desc: "Create a kind cluster (legacy name)"
+    cmds:
+      - task: hook:setup
+        vars:
+          CLUSTER_NAME: "{{.CLUSTER_NAME}}"
+
+  kind:destroy:
+    desc: "Destroy the kind cluster (legacy name)"
+    cmds:
+      - task: hook:teardown
+        vars:
+          CLUSTER_NAME: "{{.CLUSTER_NAME}}"

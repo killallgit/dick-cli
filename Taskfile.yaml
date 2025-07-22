@@ -1,0 +1,11 @@
+version: '3'
+
+tasks:
+  build:
+    cmds:
+      - go build -o bin/dick .
+
+  run:
+    desc: "Run dick for development"
+    cmds:
+      - bin/dick status

@@ -1,0 +1,86 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  build:
+    name: Build Release Artifacts
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - os: linux
+            arch: amd64
+            goos: linux
+            goarch: amd64
+          - os: linux
+            arch: arm64
+            goos: linux
+            goarch: arm64
+          - os: macos
+            arch: amd64
+            goos: darwin
+            goarch: amd64
+          - os: macos
+            arch: arm64
+            goos: darwin
+            goarch: arm64
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.23.6'
+
+    - name: Build binary
+      env:
+        GOOS: ${{ matrix.goos }}
+        GOARCH: ${{ matrix.goarch }}
+        CGO_ENABLED: 0
+      run: |
+        mkdir -p dist
+        binary_name="dick_${{ matrix.os }}_${{ matrix.arch }}"
+        
+        go build -ldflags="-s -w -X main.version=${{ github.event.release.tag_name }}" \
+          -o "dist/${binary_name}" \
+          .
+
+    - name: Create archive
+      run: |
+        mkdir -p dist
+        cd dist
+        binary_name="dick_${{ matrix.os }}_${{ matrix.arch }}"
+        archive_name="dick_${{ github.event.release.tag_name }}_${{ matrix.os }}_${{ matrix.arch }}"
+        
+        tar -czf "${archive_name}.tar.gz" "${binary_name}"
+
+    - name: Upload Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./dist/dick_${{ github.event.release.tag_name }}_${{ matrix.os }}_${{ matrix.arch }}.tar.gz
+        asset_name: dick_${{ github.event.release.tag_name }}_${{ matrix.os }}_${{ matrix.arch }}.tar.gz
+        asset_content_type: application/gzip
+
+    - name: Generate and upload checksum
+      run: |
+        cd dist
+        archive_name="dick_${{ github.event.release.tag_name }}_${{ matrix.os }}_${{ matrix.arch }}.tar.gz"
+        sha256sum "${archive_name}" > "${archive_name}.sha256"
+
+    - name: Upload Checksum
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./dist/dick_${{ github.event.release.tag_name }}_${{ matrix.os }}_${{ matrix.arch }}.tar.gz.sha256
+        asset_name: dick_${{ github.event.release.tag_name }}_${{ matrix.os }}_${{ matrix.arch }}.tar.gz.sha256
+        asset_content_type: text/plain

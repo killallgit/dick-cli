@@ -1,0 +1,18 @@
+version: '3'
+
+
+tasks:
+  gke:plan:
+    desc: "Plan the tofu cluster"
+    cmds:
+      - echo "Planning tofu cluster..."
+
+  gke:apply:
+    desc: "Apply the tofu cluster"
+    cmds:
+      - echo "Applying tofu cluster..."
+
+  gke:destroy:
+    desc: "Destroy the tofu cluster"
+    cmds:
+      - echo "Destroying tofu cluster..."

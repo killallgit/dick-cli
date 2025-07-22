@@ -1,0 +1,16 @@
+version: '3'
+
+tasks:
+  setup:
+    desc: "Set up the kind cluster"
+    cmds:
+      - kind create cluster --name {{.CLUSTER_NAME | default "dev-cluster"}}
+  kind:create:
+    desc: "Create a kind cluster"
+    cmds:
+      - kind create cluster --name {{.CLUSTER_NAME | default "dev-cluster"}}
+
+  kind:destroy:
+    desc: "Destroy the kind cluster"
+    cmds:
+      - kind delete cluster --name {{.CLUSTER_NAME | default "dev-cluster"}}
