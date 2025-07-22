@@ -21,10 +21,18 @@ func RunStatus(opts StatusOptions) error {
 	cfg := opts.Config
 
 	// Check for expired clusters before showing status
-	// This replaces the global pre-run hook
-	if err := checkExpiration(cfg); err != nil {
-		// Don't fail on expiration check errors, just warn
-		fmt.Printf("Warning: expiration check failed: %v\n", err)
+	// This replaces the global pre-run hook and provides better recovery
+	if cfg.Status == "active" {
+		if err := checkExpiration(cfg); err != nil {
+			// Don't fail on expiration check errors, just warn
+			fmt.Printf("%s Warning: expiration check failed: %v\n", tui.Icon("warning"), err)
+		}
+		
+		// Reload config after potential cleanup
+		if reloadedCfg, err := config.LoadConfig(); err == nil {
+			opts.Config = reloadedCfg
+			cfg = reloadedCfg
+		}
 	}
 
 	if opts.Watch {

@@ -49,7 +49,10 @@ func RunNew(opts NewOptions) error {
 	// This ensures any existing expired clusters are cleaned up first
 	if err := cleanup.CheckExpirationForCommand(cfg); err != nil {
 		// Don't fail on expiration check errors, just warn
-		fmt.Printf("Warning: expiration check failed: %v\n", err)
+		fmt.Printf("%s Warning: expiration check failed: %v\n", tui.Icon("warning"), err)
+	} else if cfg.Status == "destroyed" {
+		// Expired cluster was found and cleaned up
+		fmt.Printf("%s Cleaned up expired cluster before creating new one\n", tui.Icon("success"))
 	}
 
 	// Apply CLI flag overrides
@@ -88,24 +91,9 @@ func RunNew(opts NewOptions) error {
 		}
 	}()
 
-	// Schedule persistent cleanup
-	if err := cleanup.ScheduleCleanup(cfg); err != nil {
-		// Don't fail on scheduling error, just warn and start goroutine fallback
-		fmt.Printf("%s Warning: failed to schedule persistent cleanup: %v\n", 
-			tui.Icon("warning"), err)
-		fmt.Printf("%s Falling back to process-level timer\n", tui.Icon("timer"))
-		
-		// Start the goroutine timer as fallback
-		if err := cleanup.StartTTLTimer(cfg); err != nil {
-			return fmt.Errorf("failed to start TTL timer: %w", err)
-		}
-	} else {
-		// Also start goroutine timer for immediate responsiveness
-		if err := cleanup.StartTTLTimer(cfg); err != nil {
-			// Don't fail hard on goroutine timer error if scheduling succeeded
-			fmt.Printf("%s Warning: failed to start immediate timer: %v\n", 
-				tui.Icon("warning"), err)
-		}
+	// Start Go-based TTL timer (no system scheduling)
+	if err := cleanup.StartTTLTimer(cfg); err != nil {
+		return fmt.Errorf("failed to start TTL timer: %w", err)
 	}
 
 	fmt.Printf("%s %s\n", 
@@ -118,25 +106,16 @@ func RunNew(opts NewOptions) error {
 	fmt.Printf("%s Project: %s\n", 
 		tui.Icon("project"), 
 		tui.InfoValueStyle.Render(cfg.ProjectPath))
-	
-	// Show scheduling status
-	if cfg.ScheduledJobID != "" {
-		fmt.Printf("%s Cleanup scheduled (Job ID: %s)\n", 
-			tui.Icon("success"), 
-			tui.InfoValueStyle.Render(cfg.ScheduledJobID))
-	}
 
-	// If --wait flag is set, block and wait for cleanup
-	if opts.Wait {
-		fmt.Printf("\n%s Running in wait mode - process will remain active until cleanup\n", 
-			tui.Icon("timer"))
-		fmt.Printf("%s Press Ctrl+C to exit early (cleanup will still occur at scheduled time)\n", 
-			tui.Icon("info"))
-		
-		// Wait for the cleanup to complete
-		if err := waitForCleanup(cfg); err != nil {
-			return fmt.Errorf("error while waiting for cleanup: %w", err)
-		}
+	// Always run in watch mode (no conditional check)
+	fmt.Printf("\n%s Starting real-time dashboard - process will remain active until cleanup\n", 
+		tui.Icon("timer"))
+	fmt.Printf("%s Press Ctrl+C to exit early (TTL timer will continue in background)\n", 
+		tui.Icon("info"))
+	
+	// Start watch mode using the existing TUI
+	if err := startWatchMode(cfg); err != nil {
+		return fmt.Errorf("error in watch mode: %w", err)
 	}
 
 	return nil
@@ -225,6 +204,16 @@ func executeCreateTask(cfg *config.Config) error {
 	}
 
 	return nil
+}
+
+// startWatchMode starts the TUI watch interface
+func startWatchMode(cfg *config.Config) error {
+	// Use the existing status command watch mode
+	statusOpts := StatusOptions{
+		Config: cfg,
+		Watch:  true,
+	}
+	return RunStatus(statusOpts)
 }
 
 // waitForCleanup blocks until the cluster is cleaned up or the process is interrupted

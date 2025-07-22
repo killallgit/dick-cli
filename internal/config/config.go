@@ -156,6 +156,7 @@ func GetConfigFilePath() string {
 
 // ApplyFlagOverrides applies command line flag values to config
 func ApplyFlagOverrides(config *Config, provider, ttl, name *string, force *bool) {
+	// provider parameter is now optional (can be nil)
 	if provider != nil && *provider != "" {
 		config.Provider = *provider
 	}

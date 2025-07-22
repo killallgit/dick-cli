@@ -22,8 +22,11 @@ var (
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "dick",
-	Short: "Create and manage ephemeral environments",
-	Long:  `Run help for more information.`,
+	Short: "Ephemeral infrastructure manager with automatic TTL cleanup",
+	Long: `Dick creates temporary cloud environments that automatically self-destruct
+after a specified time period, preventing resource waste and cost overruns.
+
+Currently supports Kubernetes clusters via Kind with automatic cleanup scheduling.`,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		// Set global flag values
 		common.VerboseFlag = verbose

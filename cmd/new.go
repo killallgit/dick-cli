@@ -14,32 +14,22 @@ import (
 )
 
 var (
-	providerFlag    string
 	ttlFlag         string
 	nameFlag        string
-	waitFlag        bool
 	newForceFlag    bool
 )
 
 // newCmd represents the new command
 var newCmd = &cobra.Command{
-	Use:   "new [noun]",
-	Short: "Create a new ephemeral environment",
-	Long: `Create a new ephemeral cluster with TTL cleanup.
-
-The cluster will be automatically destroyed after the specified TTL expires.
-By default, the command exits immediately after creating the cluster and 
-scheduling the cleanup. Use --wait to keep the process running until cleanup.
-
-Use --force to completely overwrite the existing .dick.yaml configuration
-with defaults and any arguments provided via command line.
-	
-Examples:
-  dick new k8s --ttl 5m --provider kind
-  dick new k8s --ttl 10m --name my-cluster
-  dick new k8s --ttl 1h --wait  # Keep running until cleanup
-  dick new k8s --force --ttl 30m  # Force new config with 30m TTL
-	`,
+	Use:   "new",
+	Short: "Create a new Kubernetes environment and watch in real-time",
+	Long: `Create a new ephemeral Kubernetes cluster that automatically destroys itself
+after the specified TTL expires. The command stays active showing a real-time 
+dashboard with TTL countdown until the cluster is destroyed or you exit.`,
+	Example: `  dick new                    # Create k8s cluster with 5m TTL, then watch
+  dick new --ttl 10m          # Create with 10 minute TTL, then watch
+  dick new --name my-cluster  # Create with custom name, then watch
+  dick new --force --ttl 30m  # Force new config and watch`,
 	Run: func(cmd *cobra.Command, args []string) {
 		// Load config using Viper
 		cfg, err := config.LoadConfig()
@@ -47,31 +37,17 @@ Examples:
 			log.Fatalf("Failed to load config: %v", err)
 		}
 
-		// Handle noun parameter (optional)
-		var nounProvider string
-		if len(args) > 0 {
-			noun := args[0]
-			switch noun {
-			case "k8s", "kubernetes":
-				nounProvider = "kind"
-			default:
-				log.Fatalf("Unknown noun: %s. Supported nouns: k8s", noun)
-			}
-		}
+		// Default to Kubernetes provider (no noun parameter needed)
+		cfg.Provider = "kind"
 
-		// Apply flag overrides
-		config.ApplyFlagOverrides(cfg, &providerFlag, &ttlFlag, &nameFlag, &newForceFlag)
-		
-		// Override provider from noun if provided
-		if nounProvider != "" {
-			cfg.Provider = nounProvider
-		}
+		// Apply flag overrides (removed providerFlag)
+		config.ApplyFlagOverrides(cfg, nil, &ttlFlag, &nameFlag, &newForceFlag)
 
 		opts := commands.NewOptions{
 			Provider: cfg.Provider,
 			TTL:      cfg.TTL,
 			Name:     cfg.Name,
-			Wait:     waitFlag,
+			Wait:     true, // Always watch by default
 			Force:    cfg.Force,
 		}
 		
@@ -84,16 +60,13 @@ Examples:
 func init() {
 	rootCmd.AddCommand(newCmd)
 
-	// Add flags for CLI argument overrides
-	newCmd.Flags().StringVar(&providerFlag, "provider", "", "Infrastructure provider (kind, etc.)")
+	// Add flags for CLI argument overrides (removed --provider and --wait)
 	newCmd.Flags().StringVar(&ttlFlag, "ttl", "", "Time to live (e.g., 5m, 10m, 1h)")
 	newCmd.Flags().StringVar(&nameFlag, "name", "", "Cluster name")
-	newCmd.Flags().BoolVar(&waitFlag, "wait", false, "Keep process running until cleanup completes")
 	newCmd.Flags().BoolVar(&newForceFlag, "force", false, "Force overwrite existing config with defaults and provided args")
 
 	// Bind flags to Viper
 	if config.GlobalViper != nil {
-		viper.BindPFlag("provider", newCmd.Flags().Lookup("provider"))
 		viper.BindPFlag("ttl", newCmd.Flags().Lookup("ttl"))
 		viper.BindPFlag("name", newCmd.Flags().Lookup("name"))
 		viper.BindPFlag("force", newCmd.Flags().Lookup("force"))
