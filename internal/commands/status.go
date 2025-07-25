@@ -139,7 +139,7 @@ func runVerboseStatus(cfg *config.Config) error {
 
 // runWatch shows the continuous monitoring TUI
 func runWatch(cfg *config.Config) error {
-	model := tui.NewWatchModel(cfg)
+	model := tui.NewModel(cfg, true) // true for watch mode
 	p := tea.NewProgram(model, tea.WithAltScreen())
 	
 	if _, err := p.Run(); err != nil {

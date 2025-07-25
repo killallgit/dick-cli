@@ -6,64 +6,66 @@ package cmd
 
 import (
 	"fmt"
-	"log"
 
 	"github.com/killallgit/dick/internal/commands"
 	"github.com/killallgit/dick/internal/config"
 	"github.com/spf13/cobra"
 )
 
-// statusCmd represents the status command
-var (
-	statusWatchFlag bool
-)
+// Remove package-level flag variables - use Viper directly
 
 var statusCmd = &cobra.Command{
-	Use:       "status [noun]",
+	Use:       "status [k8s|kubernetes]",
 	Short:     "Show environment status and remaining TTL",
 	ValidArgs: []string{"k8s", "kubernetes"},
-	Args: func(cmd *cobra.Command, args []string) error {
-		if len(args) == 0 {
-			return nil
-		}
-		if len(args) > 1 {
-			return fmt.Errorf("too many arguments: %d", len(args))
-		}
-		validArgs := []string{"k8s", "kubernetes"}
-		for _, validArg := range validArgs {
-			if args[0] == validArg {
-				return nil
-			}
-		}
-		return fmt.Errorf("invalid argument %q for %q", args[0], cmd.CommandPath())
-	},
+	Args:      cobra.MaximumNArgs(1), // Use built-in validator instead of custom function
 	Long: `Display the current status of your ephemeral environment including
-remaining time before automatic TTL cleanup.`,
-	Example: `  dick status
-  dick status k8s --watch
-  dick status kubernetes --watch`,
-	Run: func(cmd *cobra.Command, args []string) {
+remaining time before automatic TTL cleanup.
+
+The environment type is optional - defaults to showing status for all environments.`,
+	Example: `  dick status                 # Show status for all environments
+  dick status k8s --watch     # Watch k8s environment status
+  dick status kubernetes      # Show kubernetes environment status`,
+	PreRunE: func(cmd *cobra.Command, args []string) error {
+		// Bind status command flags with proper namespacing
+		return config.BindStatusFlags(config.GlobalViper, cmd)
+	},
+	RunE: func(cmd *cobra.Command, args []string) error {
 		// Load config using Viper
 		cfg, err := config.LoadConfig()
 		if err != nil {
-			log.Fatalf("Failed to load config: %v", err)
+			return fmt.Errorf("failed to load config: %w", err)
 		}
 
-		// Handle noun parameter (optional) - ValidArgs handles validation
-		// In the future, this could filter status by specific resource types
+		// Get the effective configuration for the status command
+		statusConfig := cfg.GetEffectiveStatusConfig()
+
+		// Handle noun parameter (optional)
+		if len(args) == 1 {
+			noun := args[0]
+			if noun == "kubernetes" {
+				noun = "k8s" // normalize
+			}
+			// For now, we only support k8s, so just validate it
+			if noun != "k8s" {
+				return fmt.Errorf("unsupported environment type: %s (only k8s is currently supported)", noun)
+			}
+		}
 
 		opts := commands.StatusOptions{
 			Config: cfg,
-			Watch:  statusWatchFlag,
+			Watch:  statusConfig.Watch,
 		}
 		
-		if err := commands.RunStatus(opts); err != nil {
-			log.Fatalf("Error: %v", err)
-		}
+		return commands.RunStatus(opts)
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(statusCmd)
-	statusCmd.Flags().BoolVar(&statusWatchFlag, "watch", false, "Watch cluster status with live updates")
+	
+	// Define flags with modern patterns - no package variables needed
+	statusCmd.Flags().BoolP("watch", "w", false, "Watch environment status with live updates")
+	
+	// Add completion for environment types (ValidArgs provides this automatically)
 }

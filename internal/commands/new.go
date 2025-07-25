@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -64,11 +65,17 @@ func RunNew(opts NewOptions) error {
 		return fmt.Errorf("invalid TTL: %w", err)
 	}
 
-	fmt.Printf("%s Creating %s cluster %s with TTL %s...\n", 
-		tui.Icon("cluster"),
-		tui.InfoValueStyle.Render(cfg.Provider), 
-		tui.InfoValueStyle.Render(cfg.Name), 
-		tui.InfoValueStyle.Render(duration.String()))
+	// Display fancy header with colored row
+	fmt.Printf("\n%s\n", tui.Divider(60))
+	fmt.Printf("%s %s %s %s %s %s %s\n",
+		tui.HeaderStyle.Render("CREATING"),
+		tui.InfoLabelStyle.Render("Provider:"),
+		tui.SuccessStyle.Render(cfg.Provider),
+		tui.InfoLabelStyle.Render("Name:"),
+		tui.InfoValueStyle.Render(cfg.Name),
+		tui.InfoLabelStyle.Render("TTL:"),
+		tui.WarningStyle.Render(duration.String()))
+	fmt.Printf("%s\n\n", tui.Divider(60))
 
 	// Execute the create task
 	if err := executeCreateTask(cfg); err != nil {
@@ -96,15 +103,31 @@ func RunNew(opts NewOptions) error {
 		return fmt.Errorf("failed to start TTL timer: %w", err)
 	}
 
+	// Display success with fancy formatting
+	fmt.Printf("\n%s\n", tui.Divider(60))
 	fmt.Printf("%s %s\n", 
-		tui.Icon("success"), 
+		tui.SuccessStyle.Render("✓"),
 		tui.SuccessStyle.Render(fmt.Sprintf("Cluster '%s' created successfully!", cfg.Name)))
-	fmt.Printf("%s Will be destroyed in %s (at %s)\n", 
-		tui.Icon("timer"), 
-		tui.InfoValueStyle.Render(duration.String()),
-		tui.InfoValueStyle.Render(cfg.ExpiresAt.Format("15:04:05")))
-	fmt.Printf("%s Project: %s\n", 
-		tui.Icon("project"), 
+	fmt.Printf("%s\n", tui.Divider(60))
+	
+	// Display cluster details in a formatted table
+	fmt.Printf("\n%-15s %s\n", 
+		tui.InfoLabelStyle.Render("STATUS:"), 
+		tui.StatusActiveStyle.Render("ACTIVE"))
+	fmt.Printf("%-15s %s\n", 
+		tui.InfoLabelStyle.Render("PROVIDER:"), 
+		tui.InfoValueStyle.Render(cfg.Provider))
+	fmt.Printf("%-15s %s\n", 
+		tui.InfoLabelStyle.Render("NAME:"), 
+		tui.InfoValueStyle.Render(cfg.Name))
+	fmt.Printf("%-15s %s\n", 
+		tui.InfoLabelStyle.Render("TTL:"), 
+		tui.WarningStyle.Render(duration.String()))
+	fmt.Printf("%-15s %s\n", 
+		tui.InfoLabelStyle.Render("EXPIRES AT:"), 
+		tui.WarningStyle.Render(cfg.ExpiresAt.Format("15:04:05")))
+	fmt.Printf("%-15s %s\n", 
+		tui.InfoLabelStyle.Render("PROJECT PATH:"), 
 		tui.InfoValueStyle.Render(cfg.ProjectPath))
 
 	// Always run in watch mode (no conditional check)
@@ -181,26 +204,60 @@ func executeCreateTask(cfg *config.Config) error {
 	command := exec.Command("task", taskArgs...)
 	command.Dir = pwd
 	
+	// Show spinner while creating cluster
+	spinnerDone := make(chan bool)
+	go func() {
+		frames := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+		i := 0
+		for {
+			select {
+			case <-spinnerDone:
+				fmt.Printf("\r%s\r", strings.Repeat(" ", 50)) // Clear the line
+				return
+			default:
+				fmt.Printf("\r%s %s %s",
+					tui.ProgressBarStyle.Render(frames[i]),
+					tui.InfoLabelStyle.Render("Creating cluster"),
+					tui.InfoValueStyle.Render(cfg.Name))
+				i = (i + 1) % len(frames)
+				time.Sleep(100 * time.Millisecond)
+			}
+		}
+	}()
+	
 	// Handle output based on verbose/silent flags
+	var cmdErr error
 	if common.ShouldShowTaskOutput() {
+		// Stop spinner for verbose mode
+		spinnerDone <- true
+		fmt.Printf("\n")
+		
 		// Verbose mode: show all output
 		command.Stdout = os.Stdout
 		command.Stderr = os.Stderr
 		
-		if err := command.Run(); err != nil {
-			return fmt.Errorf("task execution failed: %w", err)
-		}
+		cmdErr = command.Run()
 	} else {
 		// Silent mode: capture output and only show on error
 		output, err := command.CombinedOutput()
-		if err != nil {
-			return fmt.Errorf("task execution failed: %w, output: %s", err, string(output))
+		cmdErr = err
+		
+		// Stop spinner
+		spinnerDone <- true
+		
+		if cmdErr != nil {
+			return fmt.Errorf("task execution failed: %w, output: %s", cmdErr, string(output))
 		}
 		
-		// Only show success message in silent mode
-		fmt.Printf("%s %s\n", 
-			tui.Icon("success"), 
-			tui.SuccessStyle.Render("Cluster created successfully"))
+		// Show success message with checkmark
+		fmt.Printf("\r%s %s %s\n", 
+			tui.SuccessStyle.Render("✓"),
+			tui.InfoLabelStyle.Render("Created cluster"),
+			tui.InfoValueStyle.Render(cfg.Name))
+	}
+
+	if cmdErr != nil {
+		return fmt.Errorf("task execution failed: %w", cmdErr)
 	}
 
 	return nil

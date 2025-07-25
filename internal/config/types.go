@@ -5,17 +5,46 @@ import (
 	"time"
 )
 
-// Config represents the dick configuration and state
+// GlobalConfig represents the global CLI configuration flags
+type GlobalConfig struct {
+	Verbose bool `mapstructure:"verbose" yaml:"verbose,omitempty"`
+	Silent  bool `mapstructure:"silent" yaml:"silent,omitempty"`
+}
+
+// NewConfig represents configuration for the 'new' command
+type NewConfig struct {
+	TTL      string `mapstructure:"ttl" yaml:"ttl,omitempty"`
+	Name     string `mapstructure:"name" yaml:"name,omitempty"`
+	Provider string `mapstructure:"provider" yaml:"provider,omitempty"`
+	Force    bool   `mapstructure:"force" yaml:"force,omitempty"`
+}
+
+// StatusConfig represents configuration for the 'status' command  
+type StatusConfig struct {
+	Watch bool `mapstructure:"watch" yaml:"watch,omitempty"`
+}
+
+// DestroyConfig represents configuration for the 'destroy' command
+type DestroyConfig struct {
+	Force bool `mapstructure:"force" yaml:"force,omitempty"`
+}
+
+// Config represents the complete application configuration with proper namespacing
 type Config struct {
-	// Configuration fields
+	// Command-specific configurations with proper namespacing
+	Global     GlobalConfig  `mapstructure:"global" yaml:"global,omitempty"`
+	New        NewConfig     `mapstructure:"new" yaml:"new,omitempty"`
+	StatusCmd  StatusConfig  `mapstructure:"status_cmd" yaml:"status_cmd,omitempty"`
+	Destroy    DestroyConfig `mapstructure:"destroy" yaml:"destroy,omitempty"`
+
+	// Legacy fields for backward compatibility and state tracking
+	// These will be populated from new.* fields when needed
 	Provider string `mapstructure:"provider" yaml:"provider"`
 	TTL      string `mapstructure:"ttl" yaml:"ttl"`
 	Name     string `mapstructure:"name" yaml:"name"`
+	Force    bool   `mapstructure:"force" yaml:"force,omitempty"`
 
-	// Cleanup control fields
-	Force bool `mapstructure:"force" yaml:"force,omitempty"`
-
-	// State fields
+	// State fields (unchanged)
 	Status           string    `mapstructure:"status" yaml:"status,omitempty"`
 	CreatedAt        time.Time `mapstructure:"created_at" yaml:"created_at,omitempty"`
 	ExpiresAt        time.Time `mapstructure:"expires_at" yaml:"expires_at,omitempty"`
@@ -199,4 +228,58 @@ func (c *Config) SetScheduledJobID(jobID string) {
 // ClearScheduledJob removes the scheduled job ID
 func (c *Config) ClearScheduledJob() {
 	c.ScheduledJobID = ""
+}
+
+// SyncLegacyFields synchronizes between namespaced and legacy fields
+// This ensures backward compatibility while transitioning to new structure
+func (c *Config) SyncLegacyFields() {
+	// Sync from legacy to namespaced (for loading old configs)
+	if c.Provider != "" && c.New.Provider == "" {
+		c.New.Provider = c.Provider
+	}
+	if c.TTL != "" && c.New.TTL == "" {
+		c.New.TTL = c.TTL
+	}
+	if c.Name != "" && c.New.Name == "" {
+		c.New.Name = c.Name
+	}
+	if c.Force && !c.New.Force {
+		c.New.Force = c.Force
+	}
+
+	// Sync from namespaced to legacy (for current operations)
+	if c.New.Provider != "" {
+		c.Provider = c.New.Provider
+	}
+	if c.New.TTL != "" {
+		c.TTL = c.New.TTL
+	}
+	if c.New.Name != "" {
+		c.Name = c.New.Name
+	}
+	if c.New.Force {
+		c.Force = c.New.Force
+	}
+}
+
+// GetEffectiveNewConfig returns the effective new command configuration
+// merging defaults, config file, and any overrides
+func (c *Config) GetEffectiveNewConfig() NewConfig {
+	c.SyncLegacyFields()
+	return c.New
+}
+
+// GetEffectiveStatusConfig returns the effective status command configuration
+func (c *Config) GetEffectiveStatusConfig() StatusConfig {
+	return c.StatusCmd
+}
+
+// GetEffectiveDestroyConfig returns the effective destroy command configuration
+func (c *Config) GetEffectiveDestroyConfig() DestroyConfig {
+	return c.Destroy
+}
+
+// GetEffectiveGlobalConfig returns the effective global configuration
+func (c *Config) GetEffectiveGlobalConfig() GlobalConfig {
+	return c.Global
 }

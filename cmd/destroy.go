@@ -6,63 +6,66 @@ package cmd
 
 import (
 	"fmt"
-	"log"
 
 	"github.com/killallgit/dick/internal/commands"
 	"github.com/killallgit/dick/internal/config"
 	"github.com/spf13/cobra"
 )
 
-// destroyCmd represents the destroy command
-var (
-	forceFlag bool
-)
+// Remove package-level flag variables - use Viper directly
 
 var destroyCmd = &cobra.Command{
-	Use:       "destroy [noun]",
+	Use:       "destroy [k8s|kubernetes]",
 	Short:     "Immediately destroy the environment bypassing TTL",
 	ValidArgs: []string{"k8s", "kubernetes"},
-	Args: func(cmd *cobra.Command, args []string) error {
-		if len(args) == 0 {
-			return nil
-		}
-		if len(args) > 1 {
-			return fmt.Errorf("too many arguments: %d", len(args))
-		}
-		validArgs := []string{"k8s", "kubernetes"}
-		for _, validArg := range validArgs {
-			if args[0] == validArg {
-				return nil
-			}
-		}
-		return fmt.Errorf("invalid argument %q for %q", args[0], cmd.CommandPath())
-	},
+	Args:      cobra.MaximumNArgs(1), // Use built-in validator instead of custom function
 	Long: `Immediately destroy the ephemeral environment without waiting for TTL
-expiration. This stops any running TTL timer and cleans up all resources.`,
-	Example: `  dick destroy
-  dick destroy k8s --force
-  dick destroy kubernetes`,
-	Run: func(cmd *cobra.Command, args []string) {
+expiration. This stops any running TTL timer and cleans up all resources.
+
+The environment type is optional - defaults to destroying all environments.`,
+	Example: `  dick destroy                # Destroy all environments
+  dick destroy k8s --force    # Force destroy k8s environment
+  dick destroy kubernetes     # Destroy kubernetes environment`,
+	PreRunE: func(cmd *cobra.Command, args []string) error {
+		// Bind destroy command flags with proper namespacing
+		return config.BindDestroyFlags(config.GlobalViper, cmd)
+	},
+	RunE: func(cmd *cobra.Command, args []string) error {
 		// Load config using Viper
 		cfg, err := config.LoadConfig()
 		if err != nil {
-			log.Fatalf("Failed to load config: %v", err)
+			return fmt.Errorf("failed to load config: %w", err)
 		}
 
-		// Handle noun parameter (optional) - ValidArgs handles validation
+		// Get the effective configuration for the destroy command
+		destroyConfig := cfg.GetEffectiveDestroyConfig()
+
+		// Handle noun parameter (optional)
+		if len(args) == 1 {
+			noun := args[0]
+			if noun == "kubernetes" {
+				noun = "k8s" // normalize
+			}
+			// For now, we only support k8s, so just validate it
+			if noun != "k8s" {
+				return fmt.Errorf("unsupported environment type: %s (only k8s is currently supported)", noun)
+			}
+		}
 
 		opts := commands.DestroyOptions{
 			Config: cfg,
-			Force:  forceFlag,
+			Force:  destroyConfig.Force,
 		}
 		
-		if err := commands.RunDestroy(opts); err != nil {
-			log.Fatalf("Error: %v", err)
-		}
+		return commands.RunDestroy(opts)
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(destroyCmd)
-	destroyCmd.Flags().BoolVarP(&forceFlag, "force", "f", false, "Skip confirmation prompt")
+	
+	// Define flags with modern patterns - no package variables needed
+	destroyCmd.Flags().BoolP("force", "f", false, "Skip confirmation prompt")
+	
+	// Add completion for environment types (ValidArgs provides this automatically)
 }

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/bubbletea"
+	"github.com/killallgit/dick/internal/styles"
 )
 
 // Simple spinner characters
@@ -60,11 +61,11 @@ func (m *SpinnerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // View renders the spinner
 func (m *SpinnerModel) View() string {
 	if m.err != nil {
-		return ErrorStyle.Render(fmt.Sprintf("%s Error: %v", Icon("error"), m.err))
+		return styles.ErrorStyle.Render(fmt.Sprintf("%s Error: %v", styles.Icon("error"), m.err))
 	}
 
 	if m.done {
-		return SuccessStyle.Render(fmt.Sprintf("%s %s", Icon("success"), m.message))
+		return SuccessStyle.Render(fmt.Sprintf("%s %s", styles.Icon("success"), m.message))
 	}
 
 	spinner := ProgressBarStyle.Render(spinnerChars[m.frame])

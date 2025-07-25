@@ -6,6 +6,7 @@ import (
 
 	"github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/killallgit/dick/internal/styles"
 )
 
 // ConfirmModel represents a confirmation dialog
@@ -91,12 +92,12 @@ func (m *ConfirmModel) View() string {
 	var sections []string
 
 	// Title
-	title := HeaderStyle.Render(fmt.Sprintf("%s %s", Icon("warning"), m.title))
+	title := styles.HeaderStyle.Render(fmt.Sprintf("%s %s", styles.Icon("warning"), m.title))
 	sections = append(sections, title)
 
 	// Message
 	messageStyle := lipgloss.NewStyle().
-		Foreground(ColorDark).
+		Foreground(styles.ColorDark).
 		Padding(1, 0).
 		Width(m.width - 4)
 	
@@ -114,7 +115,7 @@ func (m *ConfirmModel) View() string {
 	content := strings.Join(sections, "\n")
 
 	// Add border
-	return BorderStyle.
+	return styles.BorderStyle.
 		Width(m.width - 4).
 		Render(content)
 }
@@ -123,11 +124,11 @@ func (m *ConfirmModel) renderButtons() string {
 	var confirmStyle, cancelStyle lipgloss.Style
 
 	if m.focused == 0 {
-		confirmStyle = ButtonSelectedStyle
-		cancelStyle = ButtonStyle
+		confirmStyle = styles.ButtonSelectedStyle
+		cancelStyle = styles.ButtonStyle
 	} else {
-		confirmStyle = ButtonStyle
-		cancelStyle = ButtonSelectedStyle
+		confirmStyle = styles.ButtonStyle
+		cancelStyle = styles.ButtonSelectedStyle
 	}
 
 	confirm := confirmStyle.Render(m.confirmText)
